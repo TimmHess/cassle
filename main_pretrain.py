@@ -5,7 +5,7 @@ import types
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import LearningRateMonitor
-from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 
 from cassle.args.setup import parse_args_pretrain
 from cassle.methods import METHODS
@@ -137,7 +137,7 @@ def main():
             train_dir=args.train_dir,
             val_dir=args.val_dir,
             batch_size=args.batch_size,
-            num_workers=2 * args.num_workers,
+            num_workers=args.num_workers,
         )
 
     # check method
@@ -166,6 +166,7 @@ def main():
         model.load_state_dict(state_dict, strict=False)
 
     callbacks = []
+    loggers = []
 
     # wandb logging
     if args.wandb:
@@ -179,10 +180,19 @@ def main():
         if args.task_idx == 0:
             wandb_logger.watch(model, log="gradients", log_freq=100)
             wandb_logger.log_hyperparams(args)
+        loggers.append(wandb_logger)
 
         # lr logging
         lr_monitor = LearningRateMonitor(logging_interval="epoch")
         callbacks.append(lr_monitor)
+
+    # tensorboard logging
+    if args.tensorboard:
+        tb_logger = TensorBoardLogger(
+            save_dir=args.tensorboard_dir,
+            name=f"{args.name}-task{args.task_idx}",
+        )
+        loggers.append(tb_logger)
 
     if args.save_checkpoint:
         # save checkpoint on last epoch only
@@ -206,10 +216,9 @@ def main():
 
     trainer = Trainer.from_argparse_args(
         args,
-        logger=wandb_logger if args.wandb else None,
+        logger=loggers if loggers else None,
         callbacks=callbacks,
-        checkpoint_callback=False,
-        terminate_on_nan=True,
+        enable_checkpointing=False,
     )
 
     model.current_task_idx = args.task_idx

@@ -68,19 +68,8 @@ class Checkpointer(Callback):
             trainer (pl.Trainer): pytorch lightning trainer object.
         """
 
-        if trainer.logger is None:
-            if os.path.exists(self.logdir):
-                existing_versions = set(os.listdir(self.logdir))
-            else:
-                existing_versions = set()
-            version = "offline-" + random_string()
-            while version in existing_versions:
-                version = "offline-" + random_string()
-        else:
-            version = str(trainer.logger.version)
-        if version is not None:
-            self.path = self.logdir / version
-            self.ckpt_placeholder = f"{self.args.name}" + "-task{}-ep={}" + f"-{version}.ckpt"
+        self.path = self.logdir
+        self.ckpt_placeholder = f"{self.args.name}" + "-task_{}" + ".ckpt"
         self.last_ckpt: Optional[str] = None
 
         # create logging dirs
@@ -107,9 +96,8 @@ class Checkpointer(Callback):
         """
 
         if trainer.is_global_zero and not trainer.sanity_checking:
-            epoch = trainer.current_epoch  # type: ignore
             task_idx = getattr(self.args, "task_idx", "_all")
-            ckpt = self.path / self.ckpt_placeholder.format(task_idx, epoch)
+            ckpt = self.path / self.ckpt_placeholder.format(task_idx)
             trainer.save_checkpoint(ckpt)
 
             if self.last_ckpt and self.last_ckpt != ckpt and not self.keep_previous_checkpoints:

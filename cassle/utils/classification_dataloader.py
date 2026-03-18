@@ -8,7 +8,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.datasets import STL10, ImageFolder
-from cassle.utils.datasets import DomainNetDataset
+from cassle.utils.datasets import DomainNetDataset, HFDatasetWrapper
 from sklearn.model_selection import train_test_split
 
 
@@ -111,6 +111,8 @@ def prepare_transforms(dataset: str) -> Tuple[nn.Module, nn.Module]:
         "stl10": stl_pipeline,
         "imagenet100": imagenet_pipeline,
         "imagenet": imagenet_pipeline,
+        "imagenet1k_hf": imagenet_pipeline,
+        "imagenet100_hf": imagenet_pipeline,
         "domainnet": imagenet_pipeline,
         "custom": custom_pipeline,
     }
@@ -169,6 +171,8 @@ def prepare_datasets(
         "stl10",
         "imagenet",
         "imagenet100",
+        "imagenet1k_hf",
+        "imagenet100_hf",
         "domainnet",
         "custom",
     ]
@@ -209,6 +213,11 @@ def prepare_datasets(
 
         train_dataset = ImageFolder(train_dir, T_train)
         val_dataset = ImageFolder(val_dir, T_val)
+
+    elif dataset in ["imagenet1k_hf", "imagenet100_hf"]:
+        from datasets import load_from_disk
+        train_dataset = HFDatasetWrapper(load_from_disk(str(data_dir / train_dir)), T_train)
+        val_dataset = HFDatasetWrapper(load_from_disk(str(data_dir / val_dir)), T_val)
 
     elif dataset == "domainnet":
         train_dataset = DomainNetDataset(

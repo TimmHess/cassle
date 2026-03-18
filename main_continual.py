@@ -39,7 +39,10 @@ def run_bash_command(args):
     command = ("python3 main_pretrain.py", *args)
     command = " ".join(command)
     p = subprocess.Popen(command, shell=True)
-    p.wait()
+    # p.wait()
+    ret = p.wait()
+    if ret != 0:
+        sys.exit(ret)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,8 @@ def dataset_args(parser: ArgumentParser):
         "stl10",
         "imagenet",
         "imagenet100",
+        "imagenet1k_hf",
+        "imagenet100_hf",
         "domainnet",
         "custom",
     ]

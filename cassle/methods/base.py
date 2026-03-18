@@ -210,6 +210,10 @@ class BaseModel(pl.LightningModule):
         parser.add_argument("--wandb", action="store_true")
         parser.add_argument("--offline", action="store_true")
 
+        # tensorboard
+        parser.add_argument("--tensorboard", action="store_true")
+        parser.add_argument("--tensorboard_dir", default="tensorboard_logs", type=str)
+
         # optimizer
         SUPPORTED_OPTIMIZERS = ["sgd", "adam"]
 

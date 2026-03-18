@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset, Subset
 from torchvision import transforms
 from torchvision.datasets import STL10, ImageFolder
+from cassle.utils.datasets import HFDatasetWrapper
 
 
 def split_dataset(
@@ -27,6 +28,8 @@ def split_dataset(
         task_dataset = torch.utils.data.random_split(
             dataset, lengths, generator=torch.Generator().manual_seed(42)
         )[task_idx]
+    elif split_strategy == "joint":
+        task_dataset = dataset
     elif split_strategy == "domain":
         assert tasks is None
         raise NotImplementedError
@@ -534,7 +537,7 @@ def prepare_transform(dataset: str, multicrop: bool = False, **kwargs) -> Any:
         return CifarTransform(**kwargs) if not multicrop else MulticropCifarTransform()
     elif dataset == "stl10":
         return STLTransform(**kwargs) if not multicrop else MulticropSTLTransform()
-    elif dataset in ["imagenet", "imagenet100"]:
+    elif dataset in ["imagenet", "imagenet100", "imagenet1k_hf", "imagenet100_hf"]:
         return (
             ImagenetTransform(**kwargs) if not multicrop else MulticropImagenetTransform(**kwargs)
         )
@@ -656,6 +659,11 @@ def prepare_datasets(
     elif dataset in ["imagenet", "imagenet100"]:
         train_dir = data_dir / train_dir
         dataset = dataset_with_index(ImageFolder)(train_dir, task_transform)
+
+    elif dataset in ["imagenet1k_hf", "imagenet100_hf"]:
+        from datasets import load_from_disk
+        hf_dataset = load_from_disk(str(data_dir / train_dir))
+        dataset = dataset_with_index(HFDatasetWrapper)(hf_dataset, task_transform)
 
     elif dataset == "custom":
         train_dir = data_dir / train_dir

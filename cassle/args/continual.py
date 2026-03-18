@@ -11,7 +11,7 @@ def continual_args(parser: ArgumentParser):
     parser.add_argument("--num_tasks", type=int, default=2)
     parser.add_argument("--task_idx", type=int, required=True)
 
-    SPLIT_STRATEGIES = ["class", "data", "domain"]
+    SPLIT_STRATEGIES = ["class", "data", "domain", "joint"]
     parser.add_argument("--split_strategy", choices=SPLIT_STRATEGIES, type=str, required=True)
 
     # distillation args

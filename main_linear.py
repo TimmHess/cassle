@@ -108,8 +108,7 @@ def main():
         logger=wandb_logger if args.wandb else None,
         callbacks=callbacks,
         plugins=DDPPlugin(find_unused_parameters=True),
-        checkpoint_callback=False,
-        terminate_on_nan=True,
+        enable_checkpointing=False,
         accelerator="ddp",
     )
     if args.dali:

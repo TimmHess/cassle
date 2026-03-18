@@ -1,7 +1,30 @@
 import os
 import numpy as np
+from pathlib import Path
 from torch.utils.data.dataset import Dataset
 from PIL import Image
+
+
+class HFDatasetWrapper(Dataset):
+    """Wraps a Hugging Face Arrow dataset as a PyTorch Dataset."""
+
+    def __init__(self, hf_dataset, transform=None):
+        self.hf_dataset = hf_dataset
+        self.transform = transform
+        self.targets = hf_dataset["label"]
+        assert self.targets is not None, "Dataset must have a 'label' field."
+        self.classes = sorted(set(self.targets))
+
+    def __len__(self):
+        return len(self.hf_dataset)
+
+    def __getitem__(self, idx):
+        sample = self.hf_dataset[idx]
+        image = sample["image"].convert("RGB")
+        label = sample["label"]
+        if self.transform:
+            image = self.transform(image)
+        return image, label
 
 
 class DomainNetDataset(Dataset):

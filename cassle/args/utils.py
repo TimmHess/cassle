@@ -7,6 +7,8 @@ N_CLASSES_PER_DATASET = {
     "stl10": 10,
     "imagenet": 1000,
     "imagenet100": 100,
+    "imagenet1k_hf": 1000,
+    "imagenet100_hf": 100,
     "domainnet": 345,
 }
 
@@ -162,13 +164,11 @@ def additional_setup_pretrain(args: Namespace):
     if args.optimizer == "sgd":
         args.extra_optimizer_args["momentum"] = 0.9
 
-    if isinstance(args.gpus, int):
-        args.gpus = [args.gpus]
-    elif isinstance(args.gpus, str):
-        args.gpus = [int(gpu) for gpu in args.gpus.split(",") if gpu]
+    devices = getattr(args, "devices", 1)
+    num_gpus = devices if isinstance(devices, int) else len(devices)
 
     # adjust lr according to batch size
-    args.lr = args.lr * args.batch_size * len(args.gpus) / 256
+    args.lr = args.lr * args.batch_size * num_gpus / 256
 
 
 def additional_setup_linear(args: Namespace):
@@ -197,7 +197,5 @@ def additional_setup_linear(args: Namespace):
     if args.optimizer == "sgd":
         args.extra_optimizer_args["momentum"] = 0.9
 
-    if isinstance(args.gpus, int):
-        args.gpus = [args.gpus]
-    elif isinstance(args.gpus, str):
-        args.gpus = [int(gpu) for gpu in args.gpus.split(",") if gpu]
+    devices = getattr(args, "devices", 1)
+    num_gpus = devices if isinstance(devices, int) else len(devices)

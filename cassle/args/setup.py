@@ -101,7 +101,7 @@ def parse_args_linear() -> argparse.Namespace:
 
     parser.add_argument("--save_checkpoint", action="store_true")
     parser.add_argument("--num_tasks", type=int, default=2)
-    SPLIT_STRATEGIES = ["class", "data", "domain"]
+    SPLIT_STRATEGIES = ["class", "data", "domain", "joint"]
     parser.add_argument("--split_strategy", choices=SPLIT_STRATEGIES, type=str, required=True)
     parser.add_argument("--domain", type=str, default=None)
 
