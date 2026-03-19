@@ -14,7 +14,7 @@ from cassle.utils.datasets import HFDatasetWrapper
 
 
 def split_dataset(
-    dataset: Dataset, task_idx: List[int], num_tasks: int, split_strategy: str, tasks: list = None
+    dataset: Dataset, task_idx: List[int], num_tasks: int, split_strategy: str, tasks: list = None, seed: int = 42
 ):
     if split_strategy == "class":
         assert len(dataset.classes) == sum([len(t) for t in tasks])
@@ -26,10 +26,18 @@ def split_dataset(
         lengths = [len(dataset) // num_tasks] * num_tasks
         lengths[0] += len(dataset) - sum(lengths)
         task_dataset = torch.utils.data.random_split(
-            dataset, lengths, generator=torch.Generator().manual_seed(42)
+            dataset, lengths, generator=torch.Generator().manual_seed(seed)
         )[task_idx]
     elif split_strategy == "joint":
         task_dataset = dataset
+    elif split_strategy == "incremental_joint":
+        assert tasks is None
+        lengths = [len(dataset) // num_tasks] * num_tasks
+        lengths[0] += len(dataset) - sum(lengths)
+        splits = torch.utils.data.random_split(
+            dataset, lengths, generator=torch.Generator().manual_seed(seed)
+        )
+        task_dataset = torch.utils.data.ConcatDataset(splits[: task_idx + 1])
     elif split_strategy == "domain":
         assert tasks is None
         raise NotImplementedError

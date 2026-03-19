@@ -22,6 +22,7 @@ def dataset_args(parser: ArgumentParser):
     ]
 
     parser.add_argument("--dataset", choices=SUPPORTED_DATASETS, type=str, required=True)
+    parser.add_argument("--seed", type=int, default=5)
 
     # dataset path
     parser.add_argument("--data_dir", type=Path, required=True)

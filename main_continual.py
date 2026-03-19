@@ -52,17 +52,19 @@ if __name__ == "__main__":
     # parse args from the script
     num_tasks = int(args["--num_tasks"])
     start_task_idx = int(args.get("--task_idx", 0))
+    force_restart = "--force_restart" in args
     distill_args = {k: v for k, v in args.items() if "distill" in k}
 
     # delete things that shouldn't be used for task_idx 0
     args.pop("--task_idx", None)
+    args.pop("--force_restart", None)
     for k in distill_args.keys():
         args.pop(k, None)
 
     # check if this experiment is being resumed
     # look for the file last_checkpoint.txt
     last_checkpoint_file = os.path.join(args["--checkpoint_dir"], "last_checkpoint.txt")
-    if os.path.exists(last_checkpoint_file):
+    if not force_restart and os.path.exists(last_checkpoint_file):
         with open(last_checkpoint_file) as f:
             ckpt_path, args_path = [line.rstrip() for line in f.readlines()]
             start_task_idx = json.load(open(args_path))["task_idx"]

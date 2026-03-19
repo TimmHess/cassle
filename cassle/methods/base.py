@@ -54,6 +54,9 @@ class BaseModel(pl.LightningModule):
         tasks: list,
         num_tasks: int,
         split_strategy,
+        iters_per_task: int = None,
+        steps_per_epoch: int = None,
+        warmup_iters: int = None,
         eta_lars: float = 1e-3,
         grad_clip_lars: bool = False,
         lr_decay_steps: Sequence = None,
@@ -128,6 +131,9 @@ class BaseModel(pl.LightningModule):
         self.tasks = tasks
         self.num_tasks = num_tasks
         self.split_strategy = split_strategy
+        self.iters_per_task = iters_per_task
+        self.steps_per_epoch = steps_per_epoch
+        self.warmup_iters = warmup_iters
 
         self.domains = [
             "real",
@@ -238,6 +244,7 @@ class BaseModel(pl.LightningModule):
         parser.add_argument("--min_lr", default=0.0, type=float)
         parser.add_argument("--warmup_start_lr", default=0.003, type=float)
         parser.add_argument("--warmup_epochs", default=10, type=int)
+        parser.add_argument("--warmup_iters", default=None, type=int)
 
         # DALI only
         # uses sample indexes as labels and then gets the labels from a lookup table
@@ -318,16 +325,27 @@ class BaseModel(pl.LightningModule):
         if self.scheduler == "none":
             return optimizer
         else:
+            if self.iters_per_task:
+                total_steps = self.iters_per_task
+                warmup = (
+                    self.warmup_iters
+                    if self.warmup_iters is not None
+                    else int(self.warmup_epochs * self.steps_per_epoch)
+                )
+            else:
+                total_steps = self.max_epochs
+                warmup = self.warmup_epochs
+
             if self.scheduler == "warmup_cosine":
                 scheduler = LinearWarmupCosineAnnealingLR(
                     optimizer,
-                    warmup_epochs=self.warmup_epochs,
-                    max_epochs=self.max_epochs,
+                    warmup_epochs=warmup,
+                    max_epochs=total_steps,
                     warmup_start_lr=self.warmup_start_lr,
                     eta_min=self.min_lr,
                 )
             elif self.scheduler == "cosine":
-                scheduler = CosineAnnealingLR(optimizer, self.max_epochs, eta_min=self.min_lr)
+                scheduler = CosineAnnealingLR(optimizer, total_steps, eta_min=self.min_lr)
             elif self.scheduler == "step":
                 scheduler = MultiStepLR(optimizer, self.lr_decay_steps)
             else:
@@ -342,6 +360,8 @@ class BaseModel(pl.LightningModule):
                 )
                 scheduler.get_lr = partial_fn
 
+            if self.iters_per_task:
+                return [optimizer], [{"scheduler": scheduler, "interval": "step", "frequency": 1}]
             return [optimizer], [scheduler]
 
     def forward(self, *args, **kwargs) -> Dict:
@@ -748,7 +768,11 @@ class BaseMomentumModel(BaseModel):
             # update tau
             self.momentum_updater.update_tau(
                 cur_step=self.trainer.global_step * self.trainer.accumulate_grad_batches,
-                max_steps=len(self.trainer.train_dataloader) * self.trainer.max_epochs,
+                max_steps=(
+                    self.iters_per_task
+                    if self.iters_per_task
+                    else len(self.trainer.train_dataloader) * self.trainer.max_epochs
+                ),
             )
         self.last_step = self.trainer.global_step
 

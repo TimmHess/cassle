@@ -23,9 +23,9 @@ from cassle.utils.checkpointer import Checkpointer
 
 
 def main():
-    seed_everything(5)
-
     args = parse_args_linear()
+
+    seed_everything(args.seed)
 
     # split classes into tasks
     tasks = None

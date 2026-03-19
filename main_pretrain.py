@@ -1,3 +1,4 @@
+import math
 import os
 from pprint import pprint
 import types
@@ -38,7 +39,7 @@ from cassle.utils.pretrain_dataloader import (
 
 
 def main():
-    seed_everything(5)
+    seed_everything(args.seed)
 
     args = parse_args_pretrain()
 
@@ -107,6 +108,7 @@ def main():
             task_idx=args.task_idx,
             num_tasks=args.num_tasks,
             split_strategy=args.split_strategy,
+            seed=args.seed,
         )
 
         task_loader = prepare_dataloader(
@@ -124,6 +126,12 @@ def main():
                 num_workers=args.num_workers,
             )
             train_loaders.update({"online_eval": online_eval_loader})
+
+        if args.iters_per_task:
+            steps_per_epoch = min(len(l) for l in train_loaders.values())
+            args.max_epochs = math.ceil(args.iters_per_task / steps_per_epoch)
+            args.max_steps = args.iters_per_task
+            args.steps_per_epoch = steps_per_epoch
 
     # normal dataloader for when it is available
     if args.dataset == "custom" and (args.no_labels or args.val_dir is None):

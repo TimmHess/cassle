@@ -167,6 +167,9 @@ def additional_setup_pretrain(args: Namespace):
     devices = getattr(args, "devices", 1)
     num_gpus = devices if isinstance(devices, int) else len(devices)
 
+    if getattr(args, "use_max_num_workers", False):
+        args.num_workers = min(args.num_workers, int(os.environ.get("PYTHON_CPU_COUNT", args.num_workers)))
+
     # adjust lr according to batch size
     args.lr = args.lr * args.batch_size * num_gpus / 256
 
@@ -196,6 +199,9 @@ def additional_setup_linear(args: Namespace):
     args.extra_optimizer_args = {}
     if args.optimizer == "sgd":
         args.extra_optimizer_args["momentum"] = 0.9
+
+    if getattr(args, "use_max_num_workers", False):
+        args.num_workers = min(args.num_workers, int(os.environ.get("PYTHON_CPU_COUNT", args.num_workers)))
 
     devices = getattr(args, "devices", 1)
     num_gpus = devices if isinstance(devices, int) else len(devices)
