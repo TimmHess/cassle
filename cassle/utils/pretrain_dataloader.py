@@ -687,7 +687,7 @@ def prepare_datasets(
 
 
 def prepare_dataloader(
-    train_dataset: Dataset, batch_size: int = 64, num_workers: int = 4
+    train_dataset: Dataset, batch_size: int = 64, num_workers: int = 4, collate_fn=None
 ) -> DataLoader:
     """Prepares the training dataloader for pretraining.
 
@@ -707,5 +707,6 @@ def prepare_dataloader(
         num_workers=num_workers,
         pin_memory=True,
         drop_last=True,
+        collate_fn=collate_fn,
     )
     return train_loader

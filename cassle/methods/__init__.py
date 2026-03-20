@@ -1,3 +1,4 @@
+from cassle.methods.ijepa import IJEPA
 from cassle.methods.barlow_twins import BarlowTwins
 from cassle.methods.base import BaseModel
 from cassle.methods.byol import BYOL
@@ -18,6 +19,7 @@ METHODS = {
     "base": BaseModel,
     "linear": LinearModel,
     # methods
+    "ijepa": IJEPA,
     "barlow_twins": BarlowTwins,
     "byol": BYOL,
     "deepclusterv2": DeepClusterV2,
@@ -32,6 +34,7 @@ METHODS = {
     "wmse": WMSE,
 }
 __all__ = [
+    "IJEPA",
     "BarlowTwins",
     "BYOL",
     "BaseModel",

@@ -39,9 +39,9 @@ from cassle.utils.pretrain_dataloader import (
 
 
 def main():
-    seed_everything(args.seed)
-
     args = parse_args_pretrain()
+
+    seed_everything(args.seed)
 
     # online eval dataset reloads when task dataset is over
     args.multiple_trainloader_mode = "min_size"
@@ -88,7 +88,7 @@ def main():
             )
         else:
             if args.num_crops != 2:
-                assert args.method == "wmse"
+                assert args.method in ("wmse", "ijepa")
 
             online_eval_transform = transform[-1] if isinstance(transform, list) else transform
             task_transform = prepare_n_crop_transform(transform, num_crops=args.num_crops)
@@ -111,10 +111,26 @@ def main():
             seed=args.seed,
         )
 
+        collate_fn = None
+        if args.method == "ijepa":
+            from cassle.utils.ijepa_masks import MaskCollator
+            collate_fn = MaskCollator(
+                input_size=args.size[0],
+                patch_size=args.vit_patch_size,
+                enc_mask_scale=args.enc_mask_scale,
+                pred_mask_scale=args.pred_mask_scale,
+                aspect_ratio=args.aspect_ratio,
+                nenc=args.nenc,
+                npred=args.npred,
+                min_keep=args.min_keep,
+                allow_overlap=args.allow_overlap,
+            )
+
         task_loader = prepare_dataloader(
             task_dataset,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
+            collate_fn=collate_fn,
         )
 
         train_loaders = {f"task{args.task_idx}": task_loader}

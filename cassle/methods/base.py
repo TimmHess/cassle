@@ -163,19 +163,33 @@ class BaseModel(pl.LightningModule):
             self.min_lr = self.min_lr * self.accumulate_grad_batches
             self.warmup_start_lr = self.warmup_start_lr * self.accumulate_grad_batches
 
-        assert encoder in ["resnet18", "resnet50"]
-        from torchvision.models import resnet18, resnet50
+        from cassle.models.vision_transformer import VIT_EMBED_DIMS, VIT_FACTORIES
 
-        self.base_model = {"resnet18": resnet18, "resnet50": resnet50}[encoder]
+        _RESNET_ENCODERS = ["resnet18", "resnet50"]
+        _VIT_ENCODERS = list(VIT_EMBED_DIMS.keys())
+        assert encoder in _RESNET_ENCODERS + _VIT_ENCODERS, (
+            f"encoder must be one of {_RESNET_ENCODERS + _VIT_ENCODERS}, got '{encoder}'"
+        )
 
-        # initialize encoder
-        self.encoder = self.base_model(zero_init_residual=zero_init_residual)
-        self.features_dim = self.encoder.inplanes
-        # remove fc layer
-        self.encoder.fc = nn.Identity()
-        if cifar:
-            self.encoder.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=2, bias=False)
-            self.encoder.maxpool = nn.Identity()
+        if encoder in _RESNET_ENCODERS:
+            from torchvision.models import resnet18, resnet50
+
+            self.base_model = {"resnet18": resnet18, "resnet50": resnet50}[encoder]
+            self.encoder = self.base_model(zero_init_residual=zero_init_residual)
+            self.features_dim = self.encoder.inplanes
+            self.encoder.fc = nn.Identity()
+            if cifar:
+                self.encoder.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=2, bias=False)
+                self.encoder.maxpool = nn.Identity()
+        else:
+            # ViT encoder — patch size and image size come through kwargs
+            vit_patch_size = kwargs.get("vit_patch_size", 16)
+            img_size = kwargs.get("size", [224])
+            if isinstance(img_size, (list, tuple)):
+                img_size = img_size[0]
+            self.encoder = VIT_FACTORIES[encoder](patch_size=vit_patch_size, img_size=img_size)
+            self.features_dim = VIT_EMBED_DIMS[encoder]
+            self.base_model = None  # not used for ViT
 
         self.classifier = nn.Linear(self.features_dim, num_classes)
 
@@ -197,9 +211,11 @@ class BaseModel(pl.LightningModule):
         parser = parent_parser.add_argument_group("base")
 
         # encoder args
-        SUPPORTED_NETWORKS = ["resnet18", "resnet50"]
+        from cassle.models.vision_transformer import VIT_EMBED_DIMS
+        SUPPORTED_NETWORKS = ["resnet18", "resnet50"] + list(VIT_EMBED_DIMS.keys())
 
         parser.add_argument("--encoder", choices=SUPPORTED_NETWORKS, type=str)
+        parser.add_argument("--vit_patch_size", type=int, default=16)
         parser.add_argument("--zero_init_residual", action="store_true")
 
         # general train
@@ -221,7 +237,7 @@ class BaseModel(pl.LightningModule):
         parser.add_argument("--tensorboard_dir", default="tensorboard_logs", type=str)
 
         # optimizer
-        SUPPORTED_OPTIMIZERS = ["sgd", "adam"]
+        SUPPORTED_OPTIMIZERS = ["sgd", "adam", "adamw"]
 
         parser.add_argument("--optimizer", choices=SUPPORTED_OPTIMIZERS, type=str, required=True)
         parser.add_argument("--lars", action="store_true")
@@ -303,8 +319,10 @@ class BaseModel(pl.LightningModule):
             optimizer = torch.optim.SGD
         elif self.optimizer == "adam":
             optimizer = torch.optim.Adam
+        elif self.optimizer == "adamw":
+            optimizer = torch.optim.AdamW
         else:
-            raise ValueError(f"{self.optimizer} not in (sgd, adam)")
+            raise ValueError(f"{self.optimizer} not in (sgd, adam, adamw)")
 
         # create optimizer
         optimizer = optimizer(
