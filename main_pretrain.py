@@ -145,7 +145,9 @@ def main():
 
         if args.iters_per_task:
             steps_per_epoch = min(len(l) for l in train_loaders.values())
-            args.max_epochs = math.ceil(args.iters_per_task / steps_per_epoch)
+            accumulate = args.accumulate_grad_batches if isinstance(args.accumulate_grad_batches, int) else 1
+            optimizer_steps_per_epoch = math.ceil(steps_per_epoch / (accumulate or 1))
+            args.max_epochs = math.ceil(args.iters_per_task / optimizer_steps_per_epoch)
             args.max_steps = args.iters_per_task
             args.steps_per_epoch = steps_per_epoch
 

@@ -785,11 +785,11 @@ class BaseMomentumModel(BaseModel):
             self.log("tau", self.momentum_updater.cur_tau)
             # update tau
             self.momentum_updater.update_tau(
-                cur_step=self.trainer.global_step * self.trainer.accumulate_grad_batches,
+                cur_step=self.trainer.global_step,
                 max_steps=(
                     self.iters_per_task
                     if self.iters_per_task
-                    else len(self.trainer.train_dataloader) * self.trainer.max_epochs
+                    else len(self.trainer.train_dataloader) * self.trainer.max_epochs // self.trainer.accumulate_grad_batches
                 ),
             )
         self.last_step = self.trainer.global_step

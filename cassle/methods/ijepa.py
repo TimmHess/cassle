@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 
 from cassle.methods.base import BaseModel
-from cassle.models.vision_transformer import VisionTransformerPredictor, repeat_interleave_batch
+from cassle.models.vision_transformer import VisionTransformerPredictor, apply_masks, repeat_interleave_batch
 from cassle.utils.momentum import MomentumUpdater, initialize_momentum_params
 
 
@@ -78,12 +78,13 @@ class IJEPA(BaseModel):
         # Predictor: predict the target patches from context
         preds = self.predictor(context_feats, masks_enc_list, masks_pred_list)  # (nenc*npred*B, K_pred, D)
 
-        # Target encoder: encode the target patches (no grad)
+        # Target encoder: encode the FULL image (no masks), then select target patch positions
         with torch.no_grad():
-            target_feats = self.target_encoder(imgs, masks=masks_pred_list)  # (npred*B, K_pred, D)
+            target_feats = self.target_encoder(imgs, masks=None)  # (B, N, D)
+            target_feats = F.layer_norm(target_feats, (target_feats.size(-1),))
+            target_feats = apply_masks(target_feats, masks_pred_list)  # (npred*B, K_pred, D)
             # Repeat so each enc mask has a corresponding target
             target_feats = repeat_interleave_batch(target_feats, B, repeat=len(masks_enc_list))
-            target_feats = F.layer_norm(target_feats, (target_feats.size(-1),))
 
         loss = F.smooth_l1_loss(preds, target_feats)
         self.log("train_loss", loss, on_epoch=True, sync_dist=True)
@@ -99,11 +100,11 @@ class IJEPA(BaseModel):
             max_steps = (
                 self.iters_per_task
                 if self.iters_per_task
-                else len(self.trainer.train_dataloader) * self.trainer.max_epochs
+                else len(self.trainer.train_dataloader) * self.trainer.max_epochs // self.trainer.accumulate_grad_batches
             )
             self.momentum_updater.update(self.encoder, self.target_encoder)
             self.momentum_updater.update_tau(
-                cur_step=self.trainer.global_step * self.trainer.accumulate_grad_batches,
+                cur_step=self.trainer.global_step,
                 max_steps=max_steps,
             )
             if self.final_weight_decay is not None:
