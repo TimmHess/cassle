@@ -92,6 +92,14 @@ class IJEPA(BaseModel):
 
     def on_train_start(self):
         self.last_step = 0
+        if self.no_schedule_restart and self.current_task_idx > 0:
+            # Skip tau annealing restart: target encoder is already well-trained
+            self.momentum_updater.cur_tau = self.momentum_updater.final_tau
+            # Skip weight-decay ramp restart: start at the final value
+            if self.final_weight_decay is not None:
+                for pg in self.optimizers().param_groups:
+                    if pg.get("weight_decay", 0) > 0:
+                        pg["weight_decay"] = self.final_weight_decay
 
     def on_train_batch_end(
         self, outputs: Dict[str, Any], batch: Sequence[Any], batch_idx: int
@@ -109,7 +117,8 @@ class IJEPA(BaseModel):
             )
             if self.final_weight_decay is not None:
                 progress = min(self.trainer.global_step / max_steps, 1.0)
-                wd = self.weight_decay + (self.final_weight_decay - self.weight_decay) * progress
+                wd_start = self.final_weight_decay if (self.no_schedule_restart and self.current_task_idx > 0) else self.weight_decay
+                wd = wd_start + (self.final_weight_decay - wd_start) * progress
                 for pg in self.optimizers().param_groups:
                     if pg.get("weight_decay", 0) > 0:
                         pg["weight_decay"] = wd

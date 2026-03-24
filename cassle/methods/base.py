@@ -62,6 +62,7 @@ class BaseModel(pl.LightningModule):
         lr_decay_steps: Sequence = None,
         disable_knn_eval: bool = True,
         knn_k: int = 20,
+        no_schedule_restart: bool = False,
         **kwargs,
     ):
         """Base model that implements all basic operations for all self-supervised methods.
@@ -128,6 +129,7 @@ class BaseModel(pl.LightningModule):
         self.eta_lars = eta_lars
         self.grad_clip_lars = grad_clip_lars
         self.disable_knn_eval = disable_knn_eval
+        self.no_schedule_restart = no_schedule_restart
         self.tasks = tasks
         self.num_tasks = num_tasks
         self.split_strategy = split_strategy
@@ -271,6 +273,16 @@ class BaseModel(pl.LightningModule):
         parser.add_argument("--disable_knn_eval", action="store_true")
         parser.add_argument("--knn_k", default=20, type=int)
 
+        # continual training schedule
+        parser.add_argument(
+            "--no_schedule_restart",
+            action="store_true",
+            help="When loading from --pretrained_model (task > 0), skip LR warmup and "
+                 "start the cosine schedule directly from the target LR. "
+                 "For I-JEPA, also starts tau at final_tau_momentum and weight decay "
+                 "at final_weight_decay.",
+        )
+
         return parent_parser
 
     @property
@@ -353,6 +365,10 @@ class BaseModel(pl.LightningModule):
             else:
                 total_steps = self.max_epochs
                 warmup = self.warmup_epochs
+
+            # when continuing from a previous task checkpoint, optionally skip warmup
+            if self.no_schedule_restart and self.current_task_idx > 0:
+                warmup = 0
 
             if self.scheduler == "warmup_cosine":
                 scheduler = LinearWarmupCosineAnnealingLR(
