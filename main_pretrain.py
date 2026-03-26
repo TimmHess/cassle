@@ -28,6 +28,7 @@ else:
 
 from cassle.utils.checkpointer import Checkpointer
 from cassle.utils.classification_dataloader import prepare_data as prepare_data_classification
+from cassle.utils.memory_buffer import MemoryBuffer, build_replay_dataloader
 from cassle.utils.pretrain_dataloader import (
     prepare_dataloader,
     prepare_datasets,
@@ -126,12 +127,34 @@ def main():
                 allow_overlap=args.allow_overlap,
             )
 
-        task_loader = prepare_dataloader(
-            task_dataset,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-            collate_fn=collate_fn,
-        )
+        # --- Replay / rehearsal memory ---
+        memory_dataset = None
+        if args.replay and args.task_idx > 0:
+            replay_dir = args.replay_dir or os.path.join(args.checkpoint_dir, "replay")
+            buf = MemoryBuffer(replay_dir, samples_per_task=args.replay_samples_per_task)
+            memory_dataset = buf.get_memory_dataset(train_dataset, up_to_task=args.task_idx)
+            if memory_dataset is not None:
+                print(
+                    f"[Replay] Loaded {len(memory_dataset)} rehearsal samples "
+                    f"(replay_ratio={args.replay_ratio})."
+                )
+
+        if args.replay and memory_dataset is not None:
+            task_loader = build_replay_dataloader(
+                task_dataset,
+                memory_dataset,
+                batch_size=args.batch_size,
+                num_workers=args.num_workers,
+                replay_ratio=args.replay_ratio,
+                collate_fn=collate_fn,
+            )
+        else:
+            task_loader = prepare_dataloader(
+                task_dataset,
+                batch_size=args.batch_size,
+                num_workers=args.num_workers,
+                collate_fn=collate_fn,
+            )
 
         train_loaders = {f"task{args.task_idx}": task_loader}
 
@@ -253,6 +276,12 @@ def main():
         trainer.fit(model, val_dataloaders=val_loader)
     else:
         trainer.fit(model, train_loaders, val_loader)
+
+    # --- Save replay memory for this task (after training completes) ---
+    if args.replay and not args.dali:
+        replay_dir = args.replay_dir or os.path.join(args.checkpoint_dir, "replay")
+        buf = MemoryBuffer(replay_dir, samples_per_task=args.replay_samples_per_task)
+        buf.update(task_dataset, args.task_idx, total_budget=args.replay_memory_budget)
 
 
 if __name__ == "__main__":
