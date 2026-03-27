@@ -56,6 +56,15 @@ def continual_args(parser: ArgumentParser):
              "while keeping the total batch size unchanged.",
     )
     parser.add_argument(
+        "--replay_double_batch",
+        action="store_true",
+        default=False,
+        help="When enabled, each training step uses a batch of 2 * batch_size: "
+             "exactly batch_size samples drawn exclusively from the current task "
+             "and exactly batch_size samples drawn exclusively from the memory "
+             "buffer.  Takes priority over --replay_ratio.",
+    )
+    parser.add_argument(
         "--replay_dir",
         type=str,
         default=None,

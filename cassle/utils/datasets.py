@@ -11,9 +11,13 @@ class HFDatasetWrapper(Dataset):
     def __init__(self, hf_dataset, transform=None):
         self.hf_dataset = hf_dataset
         self.transform = transform
-        self.targets = hf_dataset["label"]
-        assert self.targets is not None, "Dataset must have a 'label' field."
-        self.classes = sorted(set(self.targets))
+        labels = hf_dataset["label"]
+        assert labels is not None, "Dataset must have a 'label' field."
+        # Store as a numpy array so forked DataLoader workers do not trigger
+        # Copy-on-Write via Python reference counting (a Python list would cause
+        # each worker to copy pages every time it reads an element).
+        self.targets = np.array(labels, dtype=np.int64)
+        self.classes = sorted(set(labels))
 
     def __len__(self):
         return len(self.hf_dataset)

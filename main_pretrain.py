@@ -146,6 +146,7 @@ def main():
                 batch_size=args.batch_size,
                 num_workers=args.num_workers,
                 replay_ratio=args.replay_ratio,
+                double_batch=args.replay_double_batch,
                 collate_fn=collate_fn,
             )
         else:

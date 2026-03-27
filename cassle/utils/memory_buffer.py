@@ -5,7 +5,7 @@ After training each task, call MemoryBuffer.update() to randomly sample and
 persist a subset of that task's data (as global indices into the full training
 dataset).  When preparing the dataloader for the next task, call
 build_replay_dataloader() which transparently merges the memory into the
-current task's data while keeping the batch size constant.
+current task's data.
 
 Two memory-sizing modes (controlled via MemoryBuffer.update()):
 
@@ -19,26 +19,36 @@ Two memory-sizing modes (controlled via MemoryBuffer.update()):
       When a new task arrives, existing task files are trimmed to stay within
       the budget (samples are evicted randomly).
 
-Two batch-interleaving modes (controlled via replay_ratio in build_replay_dataloader()):
+Three batch-interleaving modes (controlled via replay_ratio / double_batch in
+build_replay_dataloader()):
 
-  replay_ratio = None (default)
+  double_batch = True
+      Each step yields a batch of 2 * batch_size: exactly batch_size samples
+      drawn from the current task (without replacement, epoch = one pass) and
+      exactly batch_size samples drawn from memory (with replacement).  The
+      two halves are concatenated so the model sees both exclusively in one
+      forward pass.
+
+  replay_ratio = None, double_batch = False (default)
       Memory is concatenated with the task dataset and sampled proportionally,
       i.e. exactly as if the memory were part of the task's own dataset.
       Effective memory fraction per batch ≈ n_mem / (n_task + n_mem).
+      Batch size is unchanged.
 
-  replay_ratio = r  (float in (0, 1))
+  replay_ratio = r  (float in (0, 1)), double_batch = False
       Each batch contains approximately r * batch_size memory samples.
       Achieved via WeightedRandomSampler — the batch size is unchanged.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, List, Optional
 
 import torch
 from torch.utils.data import (
     ConcatDataset,
     DataLoader,
     Dataset,
+    Sampler,
     Subset,
     WeightedRandomSampler,
 )
@@ -153,28 +163,68 @@ class MemoryBuffer:
 # ---------------------------------------------------------------------------
 
 
+class _SplitBatchSampler(Sampler):
+    """Yields batches of ``2 * batch_size`` indices: the first half drawn from
+    task samples (indices ``[0, n_task)``) without replacement, and the second
+    half drawn from memory samples (indices ``[n_task, n_task + n_mem)``) with
+    replacement.
+
+    One epoch is defined as one complete pass through the task data
+    (``n_task // batch_size`` batches, last partial batch dropped).
+    Memory is sampled with replacement so we never run out regardless of
+    the relative sizes of the two sets.
+    """
+
+    def __init__(self, n_task: int, n_mem: int, batch_size: int) -> None:
+        self.n_task = n_task
+        self.n_mem = n_mem
+        self.batch_size = batch_size
+        self._num_batches = n_task // batch_size  # drop_last
+
+    def __len__(self) -> int:
+        return self._num_batches
+
+    def __iter__(self) -> Iterator[List[int]]:
+        task_perm = torch.randperm(self.n_task)
+        for i in range(self._num_batches):
+            task_idx = task_perm[
+                i * self.batch_size : (i + 1) * self.batch_size
+            ].tolist()
+            mem_idx = (
+                torch.randint(self.n_mem, (self.batch_size,)) + self.n_task
+            ).tolist()
+            yield task_idx + mem_idx
+
+
 def build_replay_dataloader(
     task_dataset: Dataset,
     memory_dataset: Optional[Dataset],
     batch_size: int,
     num_workers: int,
     replay_ratio: Optional[float] = None,
+    double_batch: bool = False,
     collate_fn=None,
 ) -> DataLoader:
-    """Build a DataLoader that interleaves *task_dataset* with *memory_dataset*
-    while keeping *batch_size* constant.
+    """Build a DataLoader that interleaves *task_dataset* with *memory_dataset*.
 
     Args:
         task_dataset:   Current task's dataset.
         memory_dataset: Rehearsal samples from previous tasks, or ``None``.
-        batch_size:     Total batch size — never increased by replay.
+        batch_size:     Batch size for the current-task half of each batch.
         num_workers:    DataLoader worker processes.
-        replay_ratio:   Controls how memory samples are mixed into each batch.
+        double_batch:   If ``True``, use the double-batch mode (takes priority
+            over *replay_ratio*).  Each step yields a batch of
+            ``2 * batch_size``: exactly *batch_size* samples drawn from the
+            current task (without replacement) concatenated with exactly
+            *batch_size* samples drawn from memory (with replacement).  One
+            epoch = one full pass through the task data.
+        replay_ratio:   Controls how memory samples are mixed into each batch
+            when *double_batch* is ``False``.
 
             ``None`` — Proportional mode.  Memory is appended to the task
             dataset and sampled uniformly (``ConcatDataset`` + shuffle).
             The fraction of memory samples per batch is naturally
-            ``n_mem / (n_task + n_mem)``.
+            ``n_mem / (n_task + n_mem)``.  Batch size is unchanged.
 
             ``float`` — Fixed-ratio mode.  Each batch contains approximately
             ``round(replay_ratio * batch_size)`` memory samples.  Implemented
@@ -200,6 +250,17 @@ def build_replay_dataloader(
     combined = ConcatDataset([task_dataset, memory_dataset])
     n_task = len(task_dataset)
     n_mem = len(memory_dataset)
+
+    if double_batch:
+        # Double-batch mode: batch_size from task + batch_size from memory.
+        sampler = _SplitBatchSampler(n_task, n_mem, batch_size)
+        return DataLoader(
+            combined,
+            batch_sampler=sampler,
+            num_workers=num_workers,
+            pin_memory=True,
+            collate_fn=collate_fn,
+        )
 
     if replay_ratio is None:
         # Proportional: treat memory as part of the task dataset.
