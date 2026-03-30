@@ -105,16 +105,15 @@ def ijepa_distill_wrapper(Method=object):
             if self.current_task_idx == 0:
                 return out
 
-            # Unpack batch (same format as IJEPA.training_step)
-            (_, imgs_list, _), masks_enc, masks_pred = batch[f"task{self.current_task_idx}"]
-            imgs = imgs_list[0]
-            masks_enc_list = [masks_enc[i] for i in range(masks_enc.shape[0])]
-            masks_pred_list = [masks_pred[i] for i in range(masks_pred.shape[0])]
+            # Reuse features already computed by IJEPA.training_step — no second
+            # forward pass through encoder + predictor.
+            current_preds = out["preds"]                    # (nenc*npred*B, K_pred, D)
+            masks_enc_list = out["masks_enc_list"]
+            masks_pred_list = out["masks_pred_list"]
 
-            # Current model predictions — gradients flow through encoder + predictor
-            current_context = self.encoder(imgs, masks=masks_enc_list)
-            current_preds = self.predictor(current_context, masks_enc_list, masks_pred_list)
-            # shape: (nenc*npred*B, K_pred, D)
+            # Still need imgs for the frozen forward
+            (_, imgs_list, _), _, _ = batch[f"task{self.current_task_idx}"]
+            imgs = imgs_list[0]
 
             # Frozen model predictions — no gradients
             frozen_preds = self._frozen_forward(imgs, masks_enc_list, masks_pred_list)

@@ -88,7 +88,14 @@ class IJEPA(BaseModel):
 
         loss = F.smooth_l1_loss(preds, target_feats)
         self.log("train_loss", loss, on_epoch=True, sync_dist=True)
-        return {"loss": loss}
+        return {
+            "loss": loss,
+            # Exposed for distillers — already computed, no extra cost.
+            "context_feats": context_feats,
+            "preds": preds,
+            "masks_enc_list": masks_enc_list,
+            "masks_pred_list": masks_pred_list,
+        }
 
     def on_train_start(self):
         self.last_step = 0
