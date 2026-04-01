@@ -52,7 +52,7 @@ def main():
 
     # split classes into tasks
     tasks = None
-    if args.split_strategy == "class":
+    if args.split_strategy in ("class", "incremental_joint_class"):
         assert args.num_classes % args.num_tasks == 0
         tasks = torch.randperm(args.num_classes).chunk(args.num_tasks)
 

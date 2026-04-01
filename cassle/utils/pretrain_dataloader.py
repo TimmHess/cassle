@@ -19,7 +19,7 @@ def split_dataset(
     if split_strategy == "class":
         assert len(dataset.classes) == sum([len(t) for t in tasks])
         mask = [(c in tasks[task_idx]) for c in dataset.targets]
-        indexes = torch.tensor(mask).nonzero()
+        indexes = torch.tensor(mask).nonzero(as_tuple=True)[0]
         task_dataset = Subset(dataset, indexes)
     elif split_strategy == "data":
         assert tasks is None
@@ -38,6 +38,12 @@ def split_dataset(
             dataset, lengths, generator=torch.Generator().manual_seed(seed)
         )
         task_dataset = torch.utils.data.ConcatDataset(splits[: task_idx + 1])
+    elif split_strategy == "incremental_joint_class":
+        seen_classes = set(int(c) for t in tasks[: task_idx + 1] for c in t)
+        assert len(dataset.classes) == sum([len(t) for t in tasks])
+        mask = [(c in seen_classes) for c in dataset.targets]
+        indexes = torch.tensor(mask).nonzero(as_tuple=True)[0]
+        task_dataset = Subset(dataset, indexes)
     elif split_strategy == "domain":
         assert tasks is None
         raise NotImplementedError
@@ -57,7 +63,7 @@ def dataset_with_index(DatasetClass: Type[Dataset]) -> Type[Dataset]:
     class DatasetWithIndex(DatasetClass):
         def __getitem__(self, index):
             data = super().__getitem__(index)
-            return (index, *data)
+            return (int(index), *data)
 
     return DatasetWithIndex
 

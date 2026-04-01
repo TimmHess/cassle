@@ -12,7 +12,7 @@ def continual_args(parser: ArgumentParser):
     parser.add_argument("--task_idx", type=int, required=True)
     parser.add_argument("--iters_per_task", type=int, default=None)
 
-    SPLIT_STRATEGIES = ["class", "data", "domain", "joint", "incremental_joint"]
+    SPLIT_STRATEGIES = ["class", "data", "domain", "joint", "incremental_joint", "incremental_joint_class"]
     parser.add_argument("--split_strategy", choices=SPLIT_STRATEGIES, type=str, required=True)
     parser.add_argument("--use_max_num_workers", action="store_true")
 

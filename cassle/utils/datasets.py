@@ -23,7 +23,7 @@ class HFDatasetWrapper(Dataset):
         return len(self.hf_dataset)
 
     def __getitem__(self, idx):
-        sample = self.hf_dataset[idx]
+        sample = self.hf_dataset[int(idx)]
         image = sample["image"].convert("RGB")
         label = sample["label"]
         if self.transform:
