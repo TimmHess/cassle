@@ -36,7 +36,8 @@ def run_bash_command(args):
     for i, a in enumerate(args):
         if isinstance(a, list):
             args[i] = " ".join(a)
-    command = ("python3 main_pretrain.py", *args)
+    nproc = os.environ.get("SLURM_GPUS_ON_NODE", "1")
+    command = (f"torchrun --nproc_per_node={nproc} main_pretrain.py", *args)
     command = " ".join(command)
     p = subprocess.Popen(command, shell=True)
     # p.wait()
