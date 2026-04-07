@@ -54,11 +54,13 @@ if __name__ == "__main__":
     num_tasks = int(args["--num_tasks"])
     start_task_idx = int(args.get("--task_idx", 0))
     force_restart = "--force_restart" in args
+    reinit_model = "--reinit_model" in args
     distill_args = {k: v for k, v in args.items() if "distill" in k}
 
     # delete things that shouldn't be used for task_idx 0
     args.pop("--task_idx", None)
     args.pop("--force_restart", None)
+    args.pop("--reinit_model", None)
     for k in distill_args.keys():
         args.pop(k, None)
 
@@ -81,9 +83,10 @@ if __name__ == "__main__":
         if task_idx != 0 and task_idx != start_task_idx:
             task_args.pop("--resume_from_checkpoint", None)
             task_args.pop("--pretrained_model", None)
-            assert os.path.exists(last_checkpoint_file)
-            ckpt_path = open(last_checkpoint_file).readlines()[0].rstrip()
-            task_args["--pretrained_model"] = ckpt_path
+            if not reinit_model:
+                assert os.path.exists(last_checkpoint_file)
+                ckpt_path = open(last_checkpoint_file).readlines()[0].rstrip()
+                task_args["--pretrained_model"] = ckpt_path
 
         if task_idx != 0 and distill_args:
             task_args.update(distill_args)
