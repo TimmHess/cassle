@@ -37,7 +37,8 @@ def run_bash_command(args):
         if isinstance(a, list):
             args[i] = " ".join(a)
     nproc = os.environ.get("SLURM_GPUS_ON_NODE", "1")
-    command = (f"torchrun --nproc_per_node={nproc} main_pretrain.py", *args)
+    port = int(os.environ.get("SLURM_JOB_ID", "29500")) % 16384 + 49152  # This gives each SLURM job a unique port in the 49152–65535 range.
+    command = (f"torchrun --nproc_per_node={nproc} --rdzv_backend c10d --rdzv_endpoint localhost:{port} main_pretrain.py", *args)
     command = " ".join(command)
     p = subprocess.Popen(command, shell=True)
     # p.wait()
